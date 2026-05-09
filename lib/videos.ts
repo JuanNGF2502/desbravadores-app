@@ -23,7 +23,7 @@ export const TRAINING_VIDEOS: TrainingVideo[] = [
     order: 1,
     title: "Posicao de Sentido",
     duration: "1min30",
-    youtubeId: "placeholder1",
+    youtubeId: "0WQeIKMh53M",
     category: "Fundamentos",
     description: "Postura base para iniciar comandos, formaturas e apresentacoes.",
     steps: ["Pes unidos e alinhados", "Corpo firme sem rigidez excessiva", "Olhar no horizonte"],
