@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   deleteOfflineVideo,
   getOfflineVideo,
@@ -62,6 +62,7 @@ export function OfflineVideoApp({ initialVideos }: OfflineVideoAppProps) {
 
   const selectedOffline = selectedVideo ? offlineMap[selectedVideo.id] : undefined;
   const canUseYoutube = isOnline && selectedVideo && !selectedVideo.youtubeId.startsWith("placeholder");
+  const videoSource = localUrl ?? selectedVideo?.localSrc ?? null;
   const totalOfflineSize = Object.values(offlineMap).reduce((sum, record) => sum + record.size, 0);
 
   useEffect(() => {
@@ -304,15 +305,15 @@ export function OfflineVideoApp({ initialVideos }: OfflineVideoAppProps) {
               </div>
             </section>
 
-            <section id="player" className="flex items-center">
-              <div className="w-full overflow-hidden rounded-lg border border-white/10 bg-[#0d1813] shadow-[0_30px_90px_rgba(0,0,0,.48)]">
+            <section id="player" className="flex items-center justify-center">
+              <div className="w-full max-w-[430px] overflow-hidden rounded-[28px] border border-white/10 bg-[#0d1813] p-2 shadow-[0_30px_90px_rgba(0,0,0,.48)]">
                 <VideoPanel
-                  localUrl={localUrl}
+                  localSource={videoSource}
                   selectedOffline={Boolean(selectedOffline)}
                   video={selectedVideo}
-                  canUseYoutube={Boolean(canUseYoutube)}
+                  canUseYoutube={Boolean(canUseYoutube && !videoSource)}
                 />
-                <div className="grid gap-4 border-t border-white/10 bg-[#0b1611] p-4 sm:grid-cols-[1fr_auto]">
+                <div className="grid gap-4 rounded-b-[22px] border-t border-white/10 bg-[#0b1611] p-4">
                   <div>
                     <p className="text-sm font-semibold text-white">{statusMessage}</p>
                     <p className="mt-1 text-xs leading-5 text-[#aeb9b1]">
@@ -387,12 +388,12 @@ export function OfflineVideoApp({ initialVideos }: OfflineVideoAppProps) {
 
 function VideoPanel({
   video,
-  localUrl,
+  localSource,
   selectedOffline,
   canUseYoutube,
 }: {
   video?: TrainingVideo;
-  localUrl: string | null;
+  localSource: string | null;
   selectedOffline: boolean;
   canUseYoutube: boolean;
 }) {
@@ -401,15 +402,15 @@ function VideoPanel({
   }
 
   return (
-    <div className="aspect-video w-full bg-black">
-      {localUrl ? (
-        <video className="h-full w-full bg-black" controls playsInline src={localUrl} />
+    <div className="aspect-[9/16] w-full overflow-hidden rounded-[22px] bg-black">
+      {localSource ? (
+        <VerticalVideoPlayer src={localSource} title={video.title} />
       ) : canUseYoutube ? (
         <iframe
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
           allowFullScreen
           className="h-full w-full"
-          src={`https://www.youtube.com/embed/${video.youtubeId}?rel=0&modestbranding=1`}
+          src={`https://www.youtube.com/embed/${video.youtubeId}?rel=0&modestbranding=1&playsinline=1`}
           title={video.title}
         />
       ) : (
@@ -429,6 +430,163 @@ function VideoPanel({
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function VerticalVideoPlayer({ src, title }: { src: string; title: string }) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const frameRef = useRef<HTMLDivElement>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [isMuted, setIsMuted] = useState(false);
+  const [duration, setDuration] = useState(0);
+  const [currentTime, setCurrentTime] = useState(0);
+
+  const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
+
+  async function togglePlay() {
+    const video = videoRef.current;
+
+    if (!video) {
+      return;
+    }
+
+    if (video.paused) {
+      await video.play().catch(() => undefined);
+      return;
+    }
+
+    video.pause();
+  }
+
+  function toggleMute() {
+    const video = videoRef.current;
+
+    if (!video) {
+      return;
+    }
+
+    video.muted = !video.muted;
+    setIsMuted(video.muted);
+  }
+
+  function seek(value: string) {
+    const video = videoRef.current;
+    const nextProgress = Number(value);
+
+    if (!video || !duration) {
+      return;
+    }
+
+    video.currentTime = (nextProgress / 100) * duration;
+    setCurrentTime(video.currentTime);
+  }
+
+  function syncMetadata() {
+    const video = videoRef.current;
+
+    if (!video) {
+      return;
+    }
+
+    setDuration(Number.isFinite(video.duration) ? video.duration : 0);
+    setCurrentTime(video.currentTime);
+    setIsMuted(video.muted);
+  }
+
+  function syncTime() {
+    const video = videoRef.current;
+
+    if (!video) {
+      return;
+    }
+
+    setCurrentTime(video.currentTime);
+  }
+
+  async function enterFullscreen() {
+    await frameRef.current?.requestFullscreen?.().catch(() => undefined);
+  }
+
+  return (
+    <div ref={frameRef} className="group relative h-full w-full bg-black">
+      <video
+        ref={videoRef}
+        className="h-full w-full object-cover"
+        key={src}
+        onClick={togglePlay}
+        onEnded={() => setIsPlaying(false)}
+        onLoadedMetadata={syncMetadata}
+        onPause={() => setIsPlaying(false)}
+        onPlay={() => setIsPlaying(true)}
+        onTimeUpdate={syncTime}
+        playsInline
+        preload="metadata"
+        src={src}
+        title={title}
+      />
+
+      <button
+        aria-label={isPlaying ? "Pausar" : "Reproduzir"}
+        className={`absolute inset-0 grid place-items-center transition ${
+          isPlaying ? "opacity-0 group-hover:opacity-100" : "opacity-100"
+        }`}
+        onClick={togglePlay}
+        type="button"
+      >
+        <span className="grid h-20 w-20 place-items-center rounded-full bg-[#f4c542]/94 text-3xl font-black text-[#10251d] shadow-[0_18px_44px_rgba(0,0,0,.42)]">
+          {isPlaying ? "II" : ">"}
+        </span>
+      </button>
+
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-[linear-gradient(0deg,rgba(0,0,0,.86),rgba(0,0,0,0))] px-4 pb-4 pt-20">
+        <div className="pointer-events-auto">
+          <input
+            aria-label="Progresso do video"
+            className="h-1 w-full accent-[#f4c542]"
+            max="100"
+            min="0"
+            onChange={(event) => seek(event.target.value)}
+            type="range"
+            value={progress}
+          />
+
+          <div className="mt-3 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <button
+                aria-label={isPlaying ? "Pausar" : "Reproduzir"}
+                className="grid h-10 w-10 place-items-center rounded-full bg-white/14 text-sm font-black text-white backdrop-blur transition hover:bg-white/22"
+                onClick={togglePlay}
+                type="button"
+              >
+                {isPlaying ? "II" : ">"}
+              </button>
+              <button
+                aria-label={isMuted ? "Ativar som" : "Silenciar"}
+                className="grid h-10 w-10 place-items-center rounded-full bg-white/14 text-sm font-black text-white backdrop-blur transition hover:bg-white/22"
+                onClick={toggleMute}
+                type="button"
+              >
+                {isMuted ? "M" : "S"}
+              </button>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <span className="text-xs font-bold text-white/82">
+                {formatTime(currentTime)} / {formatTime(duration)}
+              </span>
+              <button
+                aria-label="Tela cheia"
+                className="grid h-10 w-10 place-items-center rounded-full bg-white/14 text-xs font-black text-white backdrop-blur transition hover:bg-white/22"
+                onClick={enterFullscreen}
+                type="button"
+              >
+                FS
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -483,7 +641,7 @@ function VideoCard({
 
   return (
     <button
-      className={`group relative min-h-[210px] w-[220px] shrink-0 snap-start overflow-hidden rounded-md border text-left shadow-[0_18px_40px_rgba(0,0,0,.26)] transition duration-200 hover:-translate-y-1 hover:scale-[1.02] sm:w-[250px] ${
+      className={`group relative min-h-[280px] w-[160px] shrink-0 snap-start overflow-hidden rounded-md border text-left shadow-[0_18px_40px_rgba(0,0,0,.26)] transition duration-200 hover:-translate-y-1 hover:scale-[1.02] sm:min-h-[320px] sm:w-[190px] ${
         active ? "border-[#f4c542]" : "border-white/10 hover:border-white/24"
       }`}
       onClick={onSelect}
@@ -499,7 +657,7 @@ function VideoCard({
         }}
       />
       <span className="absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,.04)_0%,rgba(0,0,0,.38)_48%,rgba(0,0,0,.9)_100%)]" />
-      <span className="relative flex h-full min-h-[210px] flex-col justify-between p-3">
+      <span className="relative flex h-full min-h-[280px] flex-col justify-between p-3 sm:min-h-[320px]">
         <span className="flex items-start justify-between gap-3">
           <span className="rounded-md bg-black/45 px-2 py-1 text-xs font-black uppercase tracking-[0.12em] text-[#f4c542] backdrop-blur">
             Aula {video.order}
@@ -514,8 +672,10 @@ function VideoCard({
           <span className="mb-2 block text-xs font-bold uppercase tracking-[0.12em] text-[#d9c99b]">
             {video.category} | {video.duration}
           </span>
-          <span className="block text-lg font-black leading-6 text-white">{video.title}</span>
-          <span className="mt-2 block text-sm leading-5 text-white/72">{video.description}</span>
+          <span className="block text-base font-black leading-6 text-white">{video.title}</span>
+          <span className="mt-2 line-clamp-3 block text-sm leading-5 text-white/72">
+            {video.description}
+          </span>
         </span>
       </span>
     </button>
@@ -543,4 +703,17 @@ function formatBytes(size: number) {
   }
 
   return `${(size / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function formatTime(value: number) {
+  if (!Number.isFinite(value) || value <= 0) {
+    return "0:00";
+  }
+
+  const minutes = Math.floor(value / 60);
+  const seconds = Math.floor(value % 60)
+    .toString()
+    .padStart(2, "0");
+
+  return `${minutes}:${seconds}`;
 }

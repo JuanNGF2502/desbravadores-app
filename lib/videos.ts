@@ -6,6 +6,7 @@ export type TrainingVideo = {
   title: string;
   duration: string;
   youtubeId: string;
+  localSrc?: string;
   category: string;
   description: string;
   steps: string[];
