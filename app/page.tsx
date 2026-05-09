@@ -1,6 +1,5 @@
-import { OfflineVideoApp } from "@/components/offline-video-app";
-import { TRAINING_VIDEOS } from "@/lib/videos";
+import { redirect } from "next/navigation";
 
 export default function Home() {
-  return <OfflineVideoApp initialVideos={TRAINING_VIDEOS} />;
+  redirect("/home");
 }

@@ -1,5 +1,5 @@
 const CACHE_NAME = "ordem-unida-shell-v1";
-const APP_SHELL = ["/", "/manifest.webmanifest", "/icon.svg"];
+const APP_SHELL = ["/", "/home", "/videos", "/manifest.webmanifest", "/icon.svg"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
