@@ -54,6 +54,7 @@ export function VideoPlayerScreen({ video }: { video: TrainingVideo }) {
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [downloadStatus, setDownloadStatus] = useState("Baixar");
+  const [downloadMessage, setDownloadMessage] = useState("");
 
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
 
@@ -232,8 +233,20 @@ export function VideoPlayerScreen({ video }: { video: TrainingVideo }) {
 
   async function downloadVideo() {
     setDownloadStatus("Baixando...");
+    setDownloadMessage("");
 
     try {
+      if (video.localSrc) {
+        const anchor = document.createElement("a");
+        anchor.href = video.localSrc;
+        anchor.download = `${video.id}.mp4`;
+        anchor.click();
+        setDownloadStatus("Baixado");
+        setDownloadMessage("Download iniciado.");
+        window.setTimeout(() => setDownloadStatus("Baixar"), 1800);
+        return;
+      }
+
       const response = await fetch("/api/download", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -253,9 +266,11 @@ export function VideoPlayerScreen({ video }: { video: TrainingVideo }) {
       anchor.click();
       URL.revokeObjectURL(url);
       setDownloadStatus("Baixado");
+      setDownloadMessage("Download iniciado.");
       window.setTimeout(() => setDownloadStatus("Baixar"), 1800);
     } catch (error) {
-      setDownloadStatus(error instanceof Error ? error.message : "Erro");
+      setDownloadStatus("Erro");
+      setDownloadMessage(error instanceof Error ? error.message : "Falha ao baixar.");
       window.setTimeout(() => setDownloadStatus("Baixar"), 2600);
     }
   }
@@ -352,6 +367,11 @@ export function VideoPlayerScreen({ video }: { video: TrainingVideo }) {
               {downloadStatus}
             </button>
           </div>
+          {downloadMessage ? (
+            <p className="px-4 pb-4 text-xs font-semibold leading-5 text-[#ded8c8]">
+              {downloadMessage}
+            </p>
+          ) : null}
         </div>
       </div>
 

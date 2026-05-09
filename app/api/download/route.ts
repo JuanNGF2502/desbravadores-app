@@ -13,16 +13,6 @@ const formats: Record<Exclude<VideoQuality, "auto">, string> = {
 };
 
 export async function POST(request: Request) {
-  if (process.env.ENABLE_YOUTUBE_DOWNLOADS !== "true") {
-    return NextResponse.json(
-      {
-        error:
-          "Downloads estao desativados. Configure ENABLE_YOUTUBE_DOWNLOADS=true apenas para videos proprios ou autorizados.",
-      },
-      { status: 403 },
-    );
-  }
-
   const body = (await request.json().catch(() => null)) as {
     videoId?: string;
     quality?: Exclude<VideoQuality, "auto">;
@@ -34,15 +24,31 @@ export async function POST(request: Request) {
 
   const video = findTrainingVideo(body.videoId);
 
-  if (!video || video.youtubeId.startsWith("placeholder")) {
+  if (!video) {
+    return NextResponse.json({ error: "Video nao encontrado." }, { status: 404 });
+  }
+
+  if (video.youtubeId.startsWith("placeholder")) {
     return NextResponse.json(
       { error: "Substitua o placeholder por um ID real do YouTube antes de baixar." },
       { status: 400 },
     );
   }
 
+  const ytDlpCommand = await findYtDlpCommand();
+
+  if (!ytDlpCommand) {
+    return NextResponse.json(
+      {
+        error:
+          "yt-dlp nao esta instalado no servidor. Para baixar videos do YouTube, instale yt-dlp ou use um arquivo local em public/videos.",
+      },
+      { status: 501 },
+    );
+  }
+
   const child = spawn(
-    "yt-dlp",
+    ytDlpCommand,
     ["--no-playlist", "-f", formats[body.quality], "-o", "-", `https://www.youtube.com/watch?v=${video.youtubeId}`],
     { stdio: ["ignore", "pipe", "pipe"] },
   );
@@ -53,8 +59,6 @@ export async function POST(request: Request) {
     stderr += chunk;
   });
 
-  child.on("error", () => undefined);
-
   const stream = Readable.toWeb(child.stdout) as ReadableStream<Uint8Array>;
 
   return new Response(stream, {
@@ -64,5 +68,32 @@ export async function POST(request: Request) {
       "X-Offline-Video-Id": video.id,
       "X-Download-Notes": encodeURIComponent(stderr.slice(0, 200)),
     },
+  });
+}
+
+async function findYtDlpCommand() {
+  if (process.env.YT_DLP_PATH && (await commandExists(process.env.YT_DLP_PATH))) {
+    return process.env.YT_DLP_PATH;
+  }
+
+  const localBinary = process.platform === "win32" ? "bin\\yt-dlp.exe" : "./bin/yt-dlp";
+
+  if (await commandExists(localBinary)) {
+    return localBinary;
+  }
+
+  if (await commandExists("yt-dlp")) {
+    return "yt-dlp";
+  }
+
+  return null;
+}
+
+function commandExists(command: string) {
+  return new Promise<boolean>((resolve) => {
+    const child = spawn(command, ["--version"], { stdio: "ignore" });
+
+    child.on("error", () => resolve(false));
+    child.on("exit", (code) => resolve(code === 0));
   });
 }

@@ -36,6 +36,10 @@ yarn-error.log*
 # vercel
 .vercel
 
+# local video downloader binary
+bin/yt-dlp.exe
+tmp-downloads/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
